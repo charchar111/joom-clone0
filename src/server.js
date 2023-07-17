@@ -18,15 +18,42 @@ const server = http.createServer(app);
 
 const wss = new WebSocketServer({ server });
 
+let socketDB = [];
+
 wss.on("connection", (backendSocket) => {
+  socketDB.push(backendSocket);
+  backendSocket.nickname = "unknown";
   console.log("connected to browser!!");
-  backendSocket.on("close", () => {
+
+  // console.log(socketDB.length);
+  backendSocket.on("close", (backendSocket) => {
     console.log("disconnected from the client browser");
+
+    // soketDB에서 close된 소켓 삭제
+    socketDB = socketDB.filter((item) => {
+      return item.readyState !== 3 ? true : false;
+    });
   });
-  backendSocket.on("message", (socket) =>
-    console.log(socket.toString("utf-8"))
-  );
-  backendSocket.send("hello!!");
+  backendSocket.on("message", (message) => {
+    const { payload, type } = JSON.parse(message.toString());
+    // if (type == "new_message") {
+    //   socketDB.forEach((aSoket) => aSoket.send(message));
+    // } else if (type == "nickname") {
+    //   console.log("nickname");
+    // }
+    switch (type) {
+      case "new_message":
+        socketDB.forEach((item) =>
+          item.send(
+            JSON.stringify({ nickname: backendSocket.nickname, payload })
+          )
+        );
+        break;
+      case "nickname":
+        backendSocket.nickname = payload;
+        break;
+    }
+  });
 });
 // app.listen(PORT, () => {
 //   console.log(`server listen ${PORT}`);
