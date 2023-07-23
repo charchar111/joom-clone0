@@ -9,13 +9,26 @@ html(lang="en")
         header 
             h1 NOOM
         main 
-            ul.message-logs
-            form(action="").nickname-send
-                input(type="text" placeholder="write nickname" required)
-                button  Save
+            div#set-nickname
+                form(action="").room__nicknname
+                    input(type="text" placeholder="nickname" required)
+                    button Send  
+            div#enter-room(hidden)
+                h3 open room  
+                ul.room-list 
 
-            form(action="").message-send
-                input(type="text" placeholder="write msg" required)
-                button  Send 
+                       
+
+                form(action="") 
+                    input(type="text" placeholder="room name" required)
+                    button Enter Room
+            div#chat-room(hidden)
+                h3.room-name
+                ul 
+
+                form(action="").room__message
+                    input(type="text" placeholder="message" required)
+                    button Send                    
+        script(src="/socket.io/socket.io.js") 
         script(src="/static/js/app.js") 
         

@@ -1,5 +1,8 @@
 import http from "http";
-import WebSocket, { WebSocketServer } from "ws";
+import { Server } from "socket.io";
+// import socketIo from "socket.io";
+// import WebSocket, { WebSocketServer } from "ws";
+const { instrument } = require("@socket.io/admin-ui");
 import express from "express";
 
 const app = express();
@@ -14,49 +17,76 @@ app.get("/", (req, res) => {
 });
 app.get("/*", (req, res) => res.redirect("/"));
 
-const server = http.createServer(app);
+const httpServer = http.createServer(app);
+// const wsServer = socketIo(httpServer);
+const wsServer = new Server(httpServer, {
+  cors: {
+    origin: ["https://admin.socket.io"],
+    credentials: true,
+  },
+});
+instrument(wsServer, {
+  auth: false,
+});
 
-const wss = new WebSocketServer({ server });
+function publicRooms() {
+  const { sids, rooms } = wsServer.sockets.adapter;
 
-let socketDB = [];
-
-wss.on("connection", (backendSocket) => {
-  socketDB.push(backendSocket);
-  backendSocket.nickname = "unknown";
-  console.log("connected to browser!!");
-
-  // console.log(socketDB.length);
-  backendSocket.on("close", (backendSocket) => {
-    console.log("disconnected from the client browser");
-
-    // soketDB에서 close된 소켓 삭제
-    socketDB = socketDB.filter((item) => {
-      return item.readyState !== 3 ? true : false;
-    });
-  });
-  backendSocket.on("message", (message) => {
-    const { payload, type } = JSON.parse(message.toString());
-    // if (type == "new_message") {
-    //   socketDB.forEach((aSoket) => aSoket.send(message));
-    // } else if (type == "nickname") {
-    //   console.log("nickname");
-    // }
-    switch (type) {
-      case "new_message":
-        socketDB.forEach((item) =>
-          item.send(
-            JSON.stringify({ nickname: backendSocket.nickname, payload })
-          )
-        );
-        break;
-      case "nickname":
-        backendSocket.nickname = payload;
-        break;
+  const publicRooms = [];
+  rooms.forEach((_, key) => {
+    if (sids.get(key) === undefined) {
+      publicRooms.push(key);
     }
   });
-});
-// app.listen(PORT, () => {
-//   console.log(`server listen ${PORT}`);
-// });
+  return publicRooms;
+}
 
-server.listen(PORT, () => console.log(`server listen ${PORT}`));
+function countRooms(roomName) {
+  console.log("countRooms");
+
+  return wsServer.sockets.adapter.rooms.get(roomName)?.size;
+}
+
+wsServer.on("connection", (socket) => {
+  socket.nickname = "Anon";
+  wsServer.sockets.emit("room_change", publicRooms());
+  // wsServer.socketsJoin("announcement");
+  // wsServer.emit("announcement", "바른 말 고운말로 채팅하세요^^");
+  socket.onAny((event) => {
+    console.log(publicRooms());
+    console.log(`onAny: ${event}`);
+  });
+
+  socket.on("nickname", (nickname, callback) => {
+    socket.nickname = nickname;
+    callback();
+  });
+
+  socket.on("enter_room", (roomName, callback) => {
+    // console.log(Name);
+    // console.log(socket.id);
+    // console.log(socket.rooms);
+    socket.join(roomName);
+    callback();
+    socket.to(roomName).emit("welcome", socket.nickname, countRooms(roomName));
+    wsServer.sockets.emit("room_change", publicRooms());
+    // setTimeout(() => callback(Name), 3000);
+  });
+
+  socket.on("new_message", (msg, roomNames, callback) => {
+    socket.to(roomNames).emit("new_message", `${socket.nickname} : ${msg}`);
+    callback();
+  });
+
+  socket.on("disconnecting", () => {
+    socket.rooms.forEach((element) => {
+      socket.to(element).emit("bye", socket.nickname, countRooms(element) - 1);
+    });
+  });
+
+  socket.on("disconnect", () => {
+    wsServer.sockets.emit("room_change", publicRooms());
+  });
+});
+
+httpServer.listen(PORT, () => console.log(`server listen ${PORT}`));
