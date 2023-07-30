@@ -19,6 +19,9 @@ html(lang="en")
                     button#mute Mute
                     button#camera Camera off
                     select#cameras
+                        option(value="default") default 
+            div#peerStream
+                video(width="400" height="400" autoplay playsinline )#peerStream-video
 
         script(src="/socket.io/socket.io.js") 
         script(src="/static/js/app.js") 

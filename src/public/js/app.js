@@ -3,6 +3,7 @@ const socket = io();
 let socketInfo = {};
 let myPeerConnection;
 let myStream = null;
+let myDataChannel;
 
 // let socketInfo = { nickname: null, room: {} };
 const myStreamDiv = document.getElementById("myStream");
@@ -12,7 +13,7 @@ const muteBtn = myVideoControll.querySelector("#mute");
 const cameraBtn = myVideoControll.querySelector("#camera");
 const cameraSelect = document.getElementById("cameras");
 
-async function startMedia() {
+async function initCall() {
   welcomeDiv.hidden = true;
   myStreamDiv.hidden = false;
 
@@ -88,6 +89,16 @@ function handleCameraBtn(event) {
 
 async function handleCameraSelect(event) {
   await getMedia(event.target.value);
+  // 비디오 트랙 업데이트
+
+  const videoTrack = myStream.getVideoTracks()[0];
+  if (myPeerConnection) {
+    const videoSender = myPeerConnection
+      .getSenders()
+      .find((element) => element.track.kind == "video");
+    console.log(videoSender);
+    videoSender.replaceTrack(videoTrack);
+  }
 }
 
 muteBtn.addEventListener("click", handleMuteBtn);
@@ -98,11 +109,11 @@ cameraSelect.addEventListener("input", handleCameraSelect);
 const welcomeDiv = document.getElementById("welcome");
 const welcomeDivForm = document.querySelector("form");
 
-function handleWelcommSubmit(event) {
+async function handleWelcommSubmit(event) {
   event.preventDefault();
   const input = welcomeDivForm.querySelector("input ");
-
-  socket.emit("join_room", input.value, startMedia);
+  await initCall();
+  socket.emit("join_room", input.value);
   socketInfo.room = {};
   socketInfo.room.name = input.value;
   console.log(socketInfo.room.name);
@@ -112,23 +123,65 @@ welcomeDivForm.addEventListener("submit", handleWelcommSubmit);
 
 // 소켓 코드
 socket.on("welcome", async () => {
-  console.log("someone join");
+  myDataChannel = myPeerConnection.createDataChannel("chat");
+  myDataChannel.addEventListener("message", console.log);
+  console.log("make data channel");
   const offer = await myPeerConnection.createOffer();
-  console.log(offer);
+
   await myPeerConnection.setLocalDescription(offer);
+  console.log("offer send");
   socket.emit("offer", offer, socketInfo.room.name);
 });
 
-socket.on("offer", (offer) => {
-  console.log("get offer");
-  console.log(offer);
+socket.on("offer", async (offer) => {
+  console.log("receive offer");
+  myPeerConnection.addEventListener("datachannel", (event) => {
+    myDataChannel = event.channel;
+    myDataChannel.addEventListener("message", console.log);
+  });
+
+  // console.log(offer);
   myPeerConnection.setRemoteDescription(offer);
+  const answer = await myPeerConnection.createAnswer();
+
+  myPeerConnection.setLocalDescription(answer);
+  console.log("send answer");
+  socket.emit("offer_answer", answer, socketInfo.room.name);
+});
+
+socket.on("offer_answer", (answer) => {
+  console.log("reseive answer");
+  myPeerConnection.setRemoteDescription(answer);
+});
+
+socket.on("iceCandidate", async (ice) => {
+  console.log("reseived candidate");
+  myPeerConnection.addIceCandidate(ice);
 });
 
 // RTC code
 
+function handleIce(event) {
+  console.log("send candidate");
+  socket.emit("iceCandidate", event.candidate, socketInfo.room.name);
+}
+
+function handleTrack(event) {
+  console.log("handleTrack");
+  console.log(event.streams[0]);
+
+  const peerStreamDiv = document.getElementById("peerStream-video");
+  peerStreamDiv.srcObject = event.streams[0];
+}
+
 function makeConnection() {
-  myPeerConnection = new RTCPeerConnection();
+  const configuration = {
+    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  };
+
+  myPeerConnection = new RTCPeerConnection(configuration);
+  myPeerConnection.addEventListener("icecandidate", handleIce);
+  myPeerConnection.addEventListener("track", handleTrack);
   console.log(myStream.getTracks());
   myStream
     .getTracks()

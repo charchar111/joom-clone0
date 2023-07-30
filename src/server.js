@@ -26,15 +26,22 @@ const wsServer = new Server(httpServer, {
 });
 
 wsServer.on("connect", (ws) => {
-  ws.on("join_room", (roomname, callback) => {
+  ws.on("join_room", (roomname) => {
     ws.join(roomname);
     console.log(roomname);
     ws.to(roomname).emit("welcome");
-    callback();
   });
 
   ws.on("offer", (offer, roomname) => {
     ws.to(roomname).emit("offer", offer);
+  });
+
+  ws.on("offer_answer", (answer, roomname) => {
+    ws.to(roomname).emit("offer_answer", answer);
+  });
+
+  ws.on("iceCandidate", (ice, roomname) => {
+    ws.to(roomname).emit("iceCandidate", ice);
   });
 });
 
