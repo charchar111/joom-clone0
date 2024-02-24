@@ -1,5 +1,6 @@
 # NOOM
 
+이 프로젝트는 간단한 채팅 기능과 채팅방을 구현하는 것으로  NodeJS, WebRTC and Websokets를 공부하는 것이 목적입니다.
 Zoom Clone using NodeJS, WebRTC and Websokets.
 
 ## Link
